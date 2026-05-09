@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
@@ -26,7 +27,7 @@ articles_bp = Blueprint("articles", __name__, url_prefix="/articles")
 @articles_bp.route("")
 @jwt_required()
 @get_user_id
-def list_articles(user_id):
+def list_articles(user_id: int):
     stmt = select(Article).where(Article.user_id == user_id)
     articles = db.session.execute(stmt).scalars().all()
     logger.debug("Listed %d articles for user_id=%d", len(articles), user_id)
@@ -37,7 +38,7 @@ def list_articles(user_id):
 @jwt_required()
 @validate_json
 @get_user_id
-def add_article(data, user_id):
+def add_article(data: dict[str, Any], user_id: int):
     schema = ArticleSchema.model_validate(data)
     if not check_url_uniqueness(schema.url, user_id):
         raise EntityDuplicatedError("Add article", user_id, "URL", schema.url)
@@ -69,7 +70,7 @@ def add_article(data, user_id):
 @jwt_required()
 @validate_json
 @get_user_id
-def edit_article(data, user_id):
+def edit_article(data: dict[str, Any], user_id: int):
     schema = ArticleSchema.model_validate(data)
     if schema.id is None:
         logger.warning("Edit article failed — missing id for user_id=%d", user_id)
@@ -108,7 +109,7 @@ def edit_article(data, user_id):
 @jwt_required()
 @validate_json
 @get_user_id
-def delete_articles(data, user_id):
+def delete_articles(data: dict[str, Any], user_id: int):
     schema = IDSchema.model_validate(data)
     article_ids = schema.ids
     articles = get_entities(article_ids, Article, user_id)
