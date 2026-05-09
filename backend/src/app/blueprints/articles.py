@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from app.database import db
 from app.decorators import get_user_id, validate_json
+from app.exceptions import EntityDuplicatedError
 from app.models import Article, Author
 from app.schemas import ArticleSchema, IDSchema
 from app.services import (
@@ -39,8 +40,7 @@ def list_articles(user_id):
 def add_article(data, user_id):
     schema = ArticleSchema.model_validate(data)
     if not check_url_uniqueness(schema.url, user_id):
-        logger.warning("Add article failed — duplicate URL for user_id=%d: %s", user_id, schema.url)
-        return jsonify({"error": "URL already exists"}), 409
+        raise EntityDuplicatedError("Add article", user_id, "URL", schema.url)
 
     tags = associate_tags(schema.tags, user_id)
     author = get_or_create_by_name(Author, schema.author, user_id)
@@ -59,7 +59,9 @@ def add_article(data, user_id):
     )
     db.session.add(article)
     db.session.commit()
-    logger.info("Article created: id=%d title=%r user_id=%d", article.id, article.title, user_id)
+    logger.info(
+        "Article created: id=%d title=%r user_id=%d", article.id, article.title, user_id
+    )
     return jsonify(article.to_dict()), 201
 
 
@@ -73,8 +75,7 @@ def edit_article(data, user_id):
         logger.warning("Edit article failed — missing id for user_id=%d", user_id)
         return jsonify({"error": "Missing id"}), 400
     if not check_url_uniqueness(schema.url, user_id, schema.id):
-        logger.warning("Edit article failed — duplicate URL for user_id=%d article_id=%d: %s", user_id, schema.id, schema.url)
-        return jsonify({"error": "URL already exists"}), 409
+        raise EntityDuplicatedError("Edit article", user_id, "URL", schema.url)
     article = get_entity(schema.id, Article, user_id)
     tags = associate_tags(schema.tags, user_id)
     author = get_or_create_by_name(Author, schema.author, user_id)
@@ -97,7 +98,9 @@ def edit_article(data, user_id):
         },
     )
     db.session.commit()
-    logger.info("Article updated: id=%d title=%r user_id=%d", article.id, article.title, user_id)
+    logger.info(
+        "Article updated: id=%d title=%r user_id=%d", article.id, article.title, user_id
+    )
     return (jsonify(article.to_dict()), 200)
 
 
@@ -113,7 +116,12 @@ def delete_articles(data, user_id):
     for article in articles:
         db.session.delete(article)
     db.session.commit()
-    logger.info("Articles deleted: ids=%s user_id=%d count=%d", schema.ids, user_id, len(articles))
+    logger.info(
+        "Articles deleted: ids=%s user_id=%d count=%d",
+        schema.ids,
+        user_id,
+        len(articles),
+    )
     return (
         jsonify(
             {
